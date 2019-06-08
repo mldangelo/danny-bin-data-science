@@ -33,9 +33,35 @@ training_dataframes_filtered = df_condensed[(df_condensed.auction_department != 
 & (df_condensed.work_execution_year != -1) & (df_condensed.work_height != -1) & (df_condensed.work_width != -1) 
 & (df_condensed.work_measurement_unit != -1) & (df_condensed.hammer_price != -1)]
 
-print(training_dataframes_filtered.sample(20))
+df_label = training_dataframes_filtered[['hammer_price']]
+df_training = training_dataframes_filtered.drop("hammer_price", axis = 1)
+
+print(df_label.sample(20))
+print(df_training.sample(20))
 
 # convert panda dataframe to numpy array
-np_data = training_dataframes_filtered.values
+training_data = df_training.values
+training_label = df_label.values
 
-print(len(np_data))
+
+#feature normalization and vectorization
+
+
+
+#create training model, using Relu activation for hidden layer and linear for output layer
+model = tf.keras.Sequential([
+        tf.keras.layers.Dense(256, activation = 'relu'),
+        tf.keras.layers.Dense(128, activation = 'relu'),
+        tf.keras.layers.Dense(64, activation = 'relu'),
+        tf.keras.layers.Dense(1, activation = 'linear')
+])
+
+#compile the model using adam optimizer for efficiency and MSE as loss function and MAE and MAPE as target metrics
+model.compile(loss='mean_squared_error',
+                optimizer='adam',
+                metrics=['mean_absolute_error', 'mean_absolute_percentage_error'])
+
+#train the data
+model.fit(training_data, training_label, epochs=50)
+
+model.summary()
