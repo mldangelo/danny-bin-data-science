@@ -15,10 +15,10 @@ training_data_dir = root_dir+"/artists/"
 # training data files
 training_data_files = glob.glob(training_data_dir+"*.csv")
 li = []
-#cm to inch converstion
-cm_to_in = 0.3937
-#mm to inch converstion
-mm_to_in = 0.03937
+#inch to cm converstion
+in_to_cm = 2.54
+#mm to cm converstion
+mm_to_cm = 0.1
 
 #get the training data using panda
 for filename in training_data_files:
@@ -39,15 +39,18 @@ training_dataframes = pd.concat(li, axis = 0, ignore_index=True)
 #work dimentions: features being captured in work_width and work_height
 #buyer_premium: ignored per instruction
 
+#lot_place_in_auction and auction_lot_count:  Was included in V1, model performed much better without them.  They attributed to overfitting.
+
 df_condensed = training_dataframes[['artist_name', 'artist_death_year', 'auction_house', 
-'auction_department', 'auction_location', 'auction_date', 'auction_currency', 'exchange_rate_to_usd', 'auction_lot_count', 
-'lot_place_in_auction', 'work_medium', 'work_execution_year', 'work_width', 'work_height', 'work_measurement_unit', 'hammer_price']]
+'auction_department', 'auction_location', 'auction_date', 'auction_currency', 'exchange_rate_to_usd',  
+ 'work_medium', 'work_execution_year', 'work_width', 'work_height', 'work_measurement_unit', 'hammer_price', 'estimate_low', 'estimate_high']]
+
 
 #filter out rows with missing data
 training_dataframes_filtered = df_condensed[(df_condensed.auction_department != -1) & (df_condensed.auction_department != "-1") 
-& (df_condensed.auction_lot_count != -1) & (df_condensed.work_execution_year != -1) & (df_condensed.work_height != -1) 
-& (df_condensed.work_width != -1) & (df_condensed.work_measurement_unit != -1) & (df_condensed.hammer_price != -1)
-& (df_condensed.lot_place_in_auction != -1)]
+ & (df_condensed.work_execution_year > 0) & (df_condensed.work_height > 0) & (df_condensed.work_width > 0) 
+ & (df_condensed.work_measurement_unit != -1) & (df_condensed.hammer_price > 0) & (df_condensed.estimate_low > 0) & (df_condensed.estimate_high > 0)]
+
 
 #determine what is the final training data size after filtering
 #print (len(training_dataframes_filtered))
@@ -80,9 +83,9 @@ for x in one_hot_headers:
 for index, row in training_dataframes_filtered.iterrows():
 	#only take the year and month of the auction date, normalize month as it has a fixed range.
 	auction_year = int(row.auction_date[0:4])
-	auction_month = float(row.auction_date[5:7])/12
+	#auction_month = float(row.auction_date[5:7])/12
 	training_dataframes_filtered.at[index, "auction_year"] = auction_year
-	training_dataframes_filtered.at[index, "auction_month"] = auction_month
+	#training_dataframes_filtered.at[index, "auction_month"] = auction_month
 
 	#derive a new feature as auction year minus artist death year
 	gap_year = auction_year - row.artist_death_year
@@ -116,25 +119,23 @@ for index, row in training_dataframes_filtered.iterrows():
 		hammer_price_USD = row.hammer_price/row.exchange_rate_to_usd
 		training_dataframes_filtered.at[index, 'hammer_price'] = hammer_price_USD
 
-	if row.work_measurement_unit == 'cm':
-		training_dataframes_filtered.at[index, 'work_width'] = row.work_width*cm_to_in
-		training_dataframes_filtered.at[index, 'work_height'] = row.work_height*cm_to_in
+	if row.work_measurement_unit == 'in':
+		training_dataframes_filtered.at[index, 'work_width'] = row.work_width*in_to_cm
+		training_dataframes_filtered.at[index, 'work_height'] = row.work_height*in_to_cm
 
 	if row.work_measurement_unit == 'mm':
-		training_dataframes_filtered.at[index, 'work_width'] = row.work_width*mm_to_in
-		training_dataframes_filtered.at[index, 'work_height'] = row.work_height*mm_to_in
+		training_dataframes_filtered.at[index, 'work_width'] = row.work_width*mm_to_cm
+		training_dataframes_filtered.at[index, 'work_height'] = row.work_height*mm_to_cm
 
 
 
-print (training_dataframes_filtered.sample(10)["auction_month"])
-
-
-
+#print (training_dataframes_filtered.sample(10))
 
 #split the data between training data and training label
 df_label = training_dataframes_filtered[['hammer_price']]
 df_training = training_dataframes_filtered.drop(['hammer_price', 'artist_name','auction_department', 'exchange_rate_to_usd',
 	'auction_date', 'auction_house', 'auction_location', 'auction_currency', 'work_measurement_unit', 'work_medium'], axis = 1)
+
 
 #print(artist_names)
 #print(auction_departments)
@@ -143,39 +144,23 @@ df_training = training_dataframes_filtered.drop(['hammer_price', 'artist_name','
 #print(auction_currencies)
 #print(work_mediums)
 
-
-
-#one-hot encoding for non numerical data above: artist name, auction house, auction currency, auction department, auction location, work medium
-#convert hammer price base on currency
-
-#for index, row in training_dataframes_filtered
-
 # convert panda dataframe to numpy array
 training_data = df_training.values
 training_label = df_label.values
-
-
-#feature normalization and vectorization
-
-
-print(training_data)
-
 
 #create training model, using Relu activation for hidden layer and linear for output layer
 model = tf.keras.Sequential([
         tf.keras.layers.Dense(512, activation = 'relu'),
         tf.keras.layers.Dense(512, activation = 'relu'),
-        tf.keras.layers.Dense(512, activation = 'relu'),
-        tf.keras.layers.Dense(512, activation = 'relu'),
         tf.keras.layers.Dense(1)
 ])
 
-#compile the model using adam optimizer for efficiency and MSE as loss function and MAE and MAPE as target metrics
-model.compile(loss= tf.keras.losses.MeanAbsolutePercentageError(),
+#compile the model using adam optimizer and MAPE as loss function and MAPE as metrics
+model.compile(loss= 'MAPE',
                 optimizer='adam',
-                metrics=[ 'mean_absolute_percentage_error', 'mean_squared_error'])
+                metrics=[ 'mean_absolute_percentage_error'])
 
-#train the data
-model.fit(training_data, training_label, epochs=2000)
+#train the data, split bdetween 90/10 between training and validation data
+model.fit(training_data, training_label, epochs=2000, validation_split = 0.1)
 
 model.summary()
