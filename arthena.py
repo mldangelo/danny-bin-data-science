@@ -149,18 +149,27 @@ training_data = df_training.values
 training_label = df_label.values
 
 #create training model, using Relu activation for hidden layer and linear for output layer
+#add dropout layer to reduce over fitting
 model = tf.keras.Sequential([
+        tf.keras.layers.Dense(1024, activation = 'relu'),
+        #tf.keras.layers.Dropout(0.2),
         tf.keras.layers.Dense(512, activation = 'relu'),
-        tf.keras.layers.Dense(512, activation = 'relu'),
+        #tf.keras.layers.Dropout(0.2),
+        #tf.keras.layers.Dense(512, activation = 'relu'),
+        #tf.keras.layers.Dropout(0.2),
+        #tf.keras.layers.Dense(512, activation = 'relu'),
+        #tf.keras.layers.Dropout(0.2),
         tf.keras.layers.Dense(1)
 ])
 
-#compile the model using adam optimizer and MAPE as loss function and MAPE as metrics
+#compile the model 
+#optimizer: ADAM
+#Metrics: MAPE, MSE, MAE and Cosine
 model.compile(loss= 'MAPE',
                 optimizer='adam',
-                metrics=[ 'mean_absolute_percentage_error'])
+                metrics=[ 'mape', 'mse', 'mae'])
 
 #train the data, split bdetween 90/10 between training and validation data
-model.fit(training_data, training_label, epochs=2000, validation_split = 0.1)
+model.fit(training_data, training_label, epochs=500, validation_split = 0.05)
 
 model.summary()
