@@ -165,8 +165,8 @@ estimate_lows = df_estimate_lows.values
 #create training model, using Relu activation for hidden layer and linear for output layer
 #add dropout layer to reduce over fitting
 model = tf.keras.Sequential([
-        tf.keras.layers.Dense(1024, activation = keras.layers.LeakyReLU(alpha=0.01)),
-        tf.keras.layers.Dense(512, activation = keras.layers.LeakyReLU(alpha=1)),
+        tf.keras.layers.Dense(1024, activation = 'relu'),
+        tf.keras.layers.Dense(512, activation = 'relu'),
         tf.keras.layers.Dense(1)
 ])
 
@@ -175,7 +175,7 @@ model = tf.keras.Sequential([
 #Metrics: MAPE, MSE, MAE and Cosine
 model.compile(loss= 'MAPE',
                 optimizer='adam',
-                metrics=[ 'mape', 'mse', 'mae'])
+                metrics=[ 'mape', 'mae'])
 
 #train the data, split bdetween 90/10 between training and validation data
 model.fit(training_data, training_label, epochs=500, validation_split = 0.05)
