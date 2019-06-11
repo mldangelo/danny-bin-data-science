@@ -3,6 +3,7 @@ import numpy as np
 from tensorflow import keras
 import csv
 import pandas as pd
+import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 import glob
@@ -53,7 +54,9 @@ training_dataframes_filtered = df_condensed[(df_condensed.auction_department != 
 
 
 #determine what is the final training data size after filtering
-#print (len(training_dataframes_filtered))
+print (len(training_dataframes_filtered))
+#visualize the training data in graphical forms
+#sns.pairplot(training_dataframes_filtered[["hammer_price", "estimate_low", "estimate_high", "work_execution_year"]], diag_kind="kde")
 
 #get unique values for non-numerical data
 #['Andy Warhol' 'Pablo Picasso' 'Sol Lewitt']
@@ -74,7 +77,7 @@ work_mediums = training_dataframes_filtered.work_medium.unique()
 #gap_year = ['gap_year']
 
 #new headers to be added to the dataframe to allow one-hot encoding
-one_hot_headers = np.concatenate((artist_names, auction_departments, auction_houses, auction_locations, auction_currencies, 
+one_hot_headers = np.concatenate((artist_names, auction_departments, auction_houses, auction_locations, auction_currencies,
 	work_mediums))
 for x in one_hot_headers:
 	training_dataframes_filtered[x] = 0
@@ -132,9 +135,19 @@ for index, row in training_dataframes_filtered.iterrows():
 #print (training_dataframes_filtered.sample(10))
 
 #split the data between training data and training label
+
+#df_test_label = training_dataframes_filtered(frac=0.8, random_state.0)
+df_test_label = training_dataframes_filtered[['hammer_price']]
+df_test = training_dataframes_filtered.drop(['hammer_price', 'artist_name','auction_department', 'exchange_rate_to_usd',
+	'auction_date', 'auction_house', 'auction_location', 'auction_currency', 'work_measurement_unit', 'work_medium'], axis = 1)
+
 df_label = training_dataframes_filtered[['hammer_price']]
 df_training = training_dataframes_filtered.drop(['hammer_price', 'artist_name','auction_department', 'exchange_rate_to_usd',
 	'auction_date', 'auction_house', 'auction_location', 'auction_currency', 'work_measurement_unit', 'work_medium'], axis = 1)
+
+df_estimate_lows = training_dataframes_filtered[['estimate_low']]
+
+#split data into training and test, 90/10
 
 
 #print(artist_names)
@@ -147,18 +160,13 @@ df_training = training_dataframes_filtered.drop(['hammer_price', 'artist_name','
 # convert panda dataframe to numpy array
 training_data = df_training.values
 training_label = df_label.values
+estimate_lows = df_estimate_lows.values
 
 #create training model, using Relu activation for hidden layer and linear for output layer
 #add dropout layer to reduce over fitting
 model = tf.keras.Sequential([
-        tf.keras.layers.Dense(1024, activation = 'relu'),
-        #tf.keras.layers.Dropout(0.2),
-        tf.keras.layers.Dense(512, activation = 'relu'),
-        #tf.keras.layers.Dropout(0.2),
-        #tf.keras.layers.Dense(512, activation = 'relu'),
-        #tf.keras.layers.Dropout(0.2),
-        #tf.keras.layers.Dense(512, activation = 'relu'),
-        #tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(1024, activation = keras.layers.LeakyReLU(alpha=0.01)),
+        tf.keras.layers.Dense(512, activation = keras.layers.LeakyReLU(alpha=1)),
         tf.keras.layers.Dense(1)
 ])
 
@@ -173,3 +181,9 @@ model.compile(loss= 'MAPE',
 model.fit(training_data, training_label, epochs=500, validation_split = 0.05)
 
 model.summary()
+
+predicted_results = model.predict(training_data)
+
+norm_residual = (training_label - predicted_results) / estimate_lows
+
+plt.hist(norm_residual, bins=10)
