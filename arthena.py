@@ -39,7 +39,6 @@ training_dataframes = pd.concat(li, axis = 0, ignore_index=True)
 #work_title: same as description, no discernable insight for the corrent model
 #work dimentions: features being captured in work_width and work_height
 #buyer_premium: ignored per instruction
-
 #lot_place_in_auction and auction_lot_count:  Was included in V1, model performed much better without them.  They attributed to overfitting.
 
 df_condensed = training_dataframes[['artist_name', 'artist_death_year', 'auction_house', 
@@ -55,8 +54,10 @@ training_dataframes_filtered = df_condensed[(df_condensed.auction_department != 
 
 #determine what is the final training data size after filtering
 print (len(training_dataframes_filtered))
-#visualize the training data in graphical forms
-#sns.pairplot(training_dataframes_filtered[["hammer_price", "estimate_low", "estimate_high", "work_execution_year"]], diag_kind="kde")
+#visualize the training data using seaborn
+#sns.set()
+#sns.pairplot(training_dataframes_filtered[["hammer_price", "estimate_low", "estimate_high"]], diag_kind="kde")
+#plt.show()
 
 #get unique values for non-numerical data
 #['Andy Warhol' 'Pablo Picasso' 'Sol Lewitt']
@@ -71,14 +72,13 @@ auction_locations = training_dataframes_filtered.auction_location.unique()
 auction_currencies = training_dataframes_filtered.auction_currency.unique()
 #['print' 'drawing' 'painting' 'watercolor' 'photograph' 'sculpture' 'color drawing' 'poster' 'pastel' 'decorative arts']
 work_mediums = training_dataframes_filtered.work_medium.unique()
-#parse auction date into year and month
-#auction_date_parsed = ['auction_year', 'auction_month']
-#derived feature gap year - number of years between the auction year and the artist death year
-#gap_year = ['gap_year']
+
 
 #new headers to be added to the dataframe to allow one-hot encoding
 one_hot_headers = np.concatenate((artist_names, auction_departments, auction_houses, auction_locations, auction_currencies,
 	work_mediums))
+
+#default all the one-hot fields to 0
 for x in one_hot_headers:
 	training_dataframes_filtered[x] = 0
 
@@ -134,39 +134,38 @@ for index, row in training_dataframes_filtered.iterrows():
 
 #print (training_dataframes_filtered.sample(10))
 
-#split the data between training data and training label
-
-#df_test_label = training_dataframes_filtered(frac=0.8, random_state.0)
-df_test_label = training_dataframes_filtered[['hammer_price']]
-df_test = training_dataframes_filtered.drop(['hammer_price', 'artist_name','auction_department', 'exchange_rate_to_usd',
-	'auction_date', 'auction_house', 'auction_location', 'auction_currency', 'work_measurement_unit', 'work_medium'], axis = 1)
-
 df_label = training_dataframes_filtered[['hammer_price']]
 df_training = training_dataframes_filtered.drop(['hammer_price', 'artist_name','auction_department', 'exchange_rate_to_usd',
 	'auction_date', 'auction_house', 'auction_location', 'auction_currency', 'work_measurement_unit', 'work_medium'], axis = 1)
 
 df_estimate_lows = training_dataframes_filtered[['estimate_low']]
 
-#split data into training and test, 90/10
-
-
-#print(artist_names)
-#print(auction_departments)
-#print(auction_houses)
-#print(auction_locations)
-#print(auction_currencies)
-#print(work_mediums)
-
 # convert panda dataframe to numpy array
 training_data = df_training.values
 training_label = df_label.values
 estimate_lows = df_estimate_lows.values
 
+print(training_data.shape)
+print(training_label.shape)
+
+#batch size
+batch_size = 3630
+time_step = 1
+
+#reshape traning data into 3D for RNN
+#adding time step to training data and label
+#training_data = training_data.reshape(batch_size, time_step, training_data.shape[1])
+#training_label = training_label.reshape(batch_size, time_step)
+
+#print(training_data.shape)
+#print(training_label.shape)
 #create training model, using Relu activation for hidden layer and linear for output layer
 #add dropout layer to reduce over fitting
 model = tf.keras.Sequential([
-        tf.keras.layers.Dense(1024, activation = 'relu'),
+		tf.keras.layers.Dense(1024, activation = 'relu'),
         tf.keras.layers.Dense(512, activation = 'relu'),
+        #tf.keras.layers.SimpleRNN(units=1000, input_shape=(training_data.shape[1], training_data.shape[2]), activation = "relu", return_sequences = True),
+        #tf.keras.layers.SimpleRNN(units=500, activation = "relu"),
         tf.keras.layers.Dense(1)
 ])
 
@@ -178,12 +177,31 @@ model.compile(loss= 'MAPE',
                 metrics=[ 'mape', 'mae'])
 
 #train the data, split bdetween 90/10 between training and validation data
-model.fit(training_data, training_label, epochs=500, validation_split = 0.05)
-
+model.fit(training_data, training_label, epochs=2000, batch_size=batch_size, validation_split = 0.05)
 model.summary()
 
+#get predictions based on trained model
 predicted_results = model.predict(training_data)
 
+#get normalized residuals of the results.
 norm_residual = (training_label - predicted_results) / estimate_lows
 
-plt.hist(norm_residual, bins=10)
+residuals = np.concatenate(norm_residual, axis= 0)
+
+#exclude outliers from the histogram
+first_edge = -1
+last_edge = 3
+
+median = np.round(np.median(residuals),3)
+mean = np.round(np.mean(residuals),3)
+
+print(median)
+print(mean)
+
+n, bins, patches = plt.hist(x=residuals, bins="auto", range=(first_edge,last_edge))
+plt.text(1, 250, r'mean='+str(mean)+', median='+str(median))
+plt.title('(hammer_price - predicted_hammer_price) / estimate_low')
+plt.show()
+
+
+
