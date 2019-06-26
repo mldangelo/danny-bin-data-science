@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 import glob
+import math
 
 root_dir = os.getcwd()
 
@@ -120,7 +121,11 @@ for index, row in training_dataframes_filtered.iterrows():
 
 	if row.auction_currency != 'USD':
 		hammer_price_USD = row.hammer_price/row.exchange_rate_to_usd
+		estimate_low_USD = row.estimate_low/row.exchange_rate_to_usd
+		estimate_high_USD = row.estimate_high/row.exchange_rate_to_usd
 		training_dataframes_filtered.at[index, 'hammer_price'] = hammer_price_USD
+		training_dataframes_filtered.at[index, 'estimate_low'] = estimate_low_USD
+		training_dataframes_filtered.at[index, 'estimate_high'] = estimate_high_USD
 
 	if row.work_measurement_unit == 'in':
 		training_dataframes_filtered.at[index, 'work_width'] = row.work_width*in_to_cm
@@ -136,48 +141,55 @@ for index, row in training_dataframes_filtered.iterrows():
 df_label_low = training_dataframes_filtered[['estimate_low']]
 df_label_high = training_dataframes_filtered[['estimate_high']]
 df_label = training_dataframes_filtered[['hammer_price']]
-df_training = training_dataframes_filtered.drop(['hammer_price', 'estimate_low', 'estimate_high', 'artist_name','auction_department', 
+df_training = training_dataframes_filtered.drop(['hammer_price', 'artist_name','auction_department', 
 	'exchange_rate_to_usd', 'auction_date', 'auction_house', 'auction_location', 'auction_currency', 'work_measurement_unit', 'work_medium'], axis = 1)
 
+
 # convert panda dataframe to numpy array
-training_data = df_training.values
-training_label = df_label.values
+
+training_size = int(math.floor(len(df_training)*.8))
+all_data = df_training.values
+all_label = df_label.values
+training_data = all_data[:training_size]
+training_label = all_label[:training_size]
+test_data = all_data[training_size:].drop(['estimate_low', 'estimate_high'])
+test_label = all_label[training_size:]
+
 training_label_low = df_label_low.values
 training_label_high = df_label_high.values
 #print(training_data)
 
 #batch size
-batch_size = 500
+batch_size = 100
 time_step = 1
-epochs = 2000
+epochs = 100
 
 #reshape traning data into 3D for RNN
 #adding time step to training data and label
 #training_data_low = training_data_low.reshape(batch_size, time_step, training_data_low.shape[1])
 #training_label_low = training_label_low.reshape(batch_size, time_step)
 
+
+
+
 #create training model, using Relu activation for hidden layer and linear for output layer, to get estimate_low
 model_low = tf.keras.Sequential([
         #tf.keras.layers.SimpleRNN(units=1000, input_shape=(training_data_low.shape[1], training_data_low.shape[2]), activation = "relu", return_sequences = True),
         #tf.keras.layers.SimpleRNN(units=500, activation = "relu"),
-        tf.keras.layers.Dense(1024, activation = 'relu'),
         tf.keras.layers.Dense(512, activation = 'relu'),
-        tf.keras.layers.Dense(1024, activation = 'relu'),
-        tf.keras.layers.Dense(1024, activation = 'relu'),
-        tf.keras.layers.Dense(1024, activation = 'relu'),
-        tf.keras.layers.Dense(1024, activation = 'relu'),
+        tf.keras.layers.Dense(256, activation = 'relu'),
         tf.keras.layers.Dense(1)
 ])
 
 #compile the model 
 #optimizer: ADAM
 #Metrics: MAPE, MSE, MAE and Cosine
-model_low.compile(loss= 'MAPE',
+model_low.compile(loss= 'mape',
                 optimizer='adam',
                 metrics=[ 'mape', 'mae'])
 
 #train the data, split bdetween 90/10 between training and validation data
-model_low.fit(training_data, training_label_low, epochs=epochs, batch_size=batch_size, validation_split = 0.05)
+model_low.fit(training_data, training_label_low, epochs=epochs, batch_size=batch_size, validation_split = 0.1)
 
 #get predictions based on trained model
 predicted_results_low = model_low.predict(training_data)
@@ -192,22 +204,18 @@ training_data_with_estimates_low = np.append(training_data, predicted_results_lo
 model_high = tf.keras.Sequential([
         #tf.keras.layers.SimpleRNN(units=1000, input_shape=(training_data_low.shape[1], training_data_low.shape[2]), activation = "relu", return_sequences = True),
         #tf.keras.layers.SimpleRNN(units=500, activation = "relu"),
-        tf.keras.layers.Dense(1024, activation = 'relu'),
         tf.keras.layers.Dense(512, activation = 'relu'),
-        tf.keras.layers.Dense(1024, activation = 'relu'),
-        tf.keras.layers.Dense(1024, activation = 'relu'),
-        tf.keras.layers.Dense(1024, activation = 'relu'),
-        tf.keras.layers.Dense(1024, activation = 'relu'),
+        tf.keras.layers.Dense(256, activation = 'relu'),
         tf.keras.layers.Dense(1)
 ])
 
 #compile the model
-model_high.compile(loss= 'MAPE',
+model_high.compile(loss= 'mape',
                 optimizer='adam',
                 metrics=[ 'mape', 'mae'])
 
 #train the data, split bdetween 90/10 between training and validation data
-model_high.fit(training_data_with_estimates_low, training_label_high, epochs=epochs, batch_size=batch_size, validation_split = 0.05)
+model_high.fit(training_data_with_estimates_low, training_label_high, epochs=epochs, batch_size=batch_size, validation_split = 0.1)
 
 #get predictions based on trained model
 predicted_results_high = model_high.predict(training_data_with_estimates_low)
@@ -215,16 +223,15 @@ predicted_results_high = model_high.predict(training_data_with_estimates_low)
 #print(predicted_results_high)
 
 #append predicted estimates_high prices to the training data
-training_data_with_estimates = np.append(training_data_with_estimates_low, predicted_results_high, axis=1)
+data_with_trained_estimates = np.append(training_data_with_estimates_low, predicted_results_high, axis=1)
 
 
-#train model using estimates
+#train model using with estimates
 model = tf.keras.Sequential([
         #tf.keras.layers.SimpleRNN(units=1000, input_shape=(training_data_low.shape[1], training_data_low.shape[2]), activation = "relu", return_sequences = True),
         #tf.keras.layers.SimpleRNN(units=500, activation = "relu"),
-        tf.keras.layers.Dense(1024, activation = 'relu'),
         tf.keras.layers.Dense(512, activation = 'relu'),
-        tf.keras.layers.Dense(1024, activation = 'relu'),
+        tf.keras.layers.Dense(256, activation = 'relu'),
         #tf.keras.layers.Dense(512, activation = 'relu'),
         tf.keras.layers.Dense(1)
 ])
@@ -235,13 +242,19 @@ model.compile(loss= 'MAPE',
                 metrics=[ 'mape', 'mae'])
 
 #train the data, split bdetween 90/10 between training and validation data
-model.fit(training_data_with_estimates, training_label, epochs=epochs, batch_size=batch_size, validation_split = 0.05)
+model.fit(training_data_with_estimates, training_label, epochs=epochs, batch_size=batch_size, validation_split = 0.1)
+
+
 
 #get predictions based on trained model
 predicted_results = model.predict(training_data_with_estimates)
+
 #predicted_results_high = np.concatenate(predicted_results_high, axis = 0)
 print(predicted_results)
 
+#evaluation = model.evaluate(training_data, training_label, batch_size =100)
+
+#print(evaluation)
 #get normalized residuals of the results.
 #norm_residual = (training_label - predicted_results) / estimate_lows
 

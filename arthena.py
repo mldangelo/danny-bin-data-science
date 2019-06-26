@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 import glob
+import math
 
 root_dir = os.getcwd()
 
@@ -120,7 +121,11 @@ for index, row in training_dataframes_filtered.iterrows():
 
 	if row.auction_currency != 'USD':
 		hammer_price_USD = row.hammer_price/row.exchange_rate_to_usd
+		estimate_low_USD = row.estimate_low/row.exchange_rate_to_usd
+		estimate_high_USD = row.estimate_high/row.exchange_rate_to_usd
 		training_dataframes_filtered.at[index, 'hammer_price'] = hammer_price_USD
+		training_dataframes_filtered.at[index, 'estimate_low'] = estimate_low_USD
+		training_dataframes_filtered.at[index, 'estimate_high'] = estimate_high_USD
 
 	if row.work_measurement_unit == 'in':
 		training_dataframes_filtered.at[index, 'work_width'] = row.work_width*in_to_cm
@@ -141,15 +146,19 @@ df_training = training_dataframes_filtered.drop(['hammer_price', 'artist_name','
 df_estimate_lows = training_dataframes_filtered[['estimate_low']]
 
 # convert panda dataframe to numpy array
-training_data = df_training.values
-training_label = df_label.values
-estimate_lows = df_estimate_lows.values
+#split the data into training and test, 80/20 split
+training_size = int(math.floor(len(df_training)*.8))
+all_data = df_training.values
+all_label = df_label.values
+training_data = all_data[:training_size]
+training_label = all_label[:training_size]
+test_data = all_data[training_size:]
+test_label = all_label[training_size:]
 
-print(training_data.shape)
-print(training_label.shape)
+estimate_lows = df_estimate_lows.values[training_size:]
 
 #batch size
-batch_size = 3630
+batch_size = training_size
 time_step = 1
 
 #reshape traning data into 3D for RNN
@@ -177,14 +186,18 @@ model.compile(loss= 'MAPE',
                 metrics=[ 'mape', 'mae'])
 
 #train the data, split bdetween 90/10 between training and validation data
-model.fit(training_data, training_label, epochs=2000, batch_size=batch_size, validation_split = 0.05)
+model.fit(training_data, training_label, epochs=2000, batch_size=batch_size, validation_split = 0.1)
 model.summary()
 
+#evaluate the model results
+results = model.evaluate(test_data, test_label)
+print(results)
+
 #get predictions based on trained model
-predicted_results = model.predict(training_data)
+predicted_results = model.predict(test_data)
 
 #get normalized residuals of the results.
-norm_residual = (training_label - predicted_results) / estimate_lows
+norm_residual = (test_label - predicted_results) / estimate_lows
 
 residuals = np.concatenate(norm_residual, axis= 0)
 
