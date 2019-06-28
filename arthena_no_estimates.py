@@ -42,9 +42,9 @@ training_dataframes = pd.concat(li, axis = 0, ignore_index=True)
 #buyer_premium: ignored per instruction
 #lot_place_in_auction and auction_lot_count:  Was included in V1, model performed much better without them.  They attributed to overfitting.
 
-df_condensed = training_dataframes[['artist_name', 'artist_death_year', 'auction_house', 
-'auction_department', 'auction_location', 'auction_date', 'auction_currency', 'exchange_rate_to_usd',  
- 'work_medium', 'work_execution_year', 'work_width', 'work_height', 'work_measurement_unit', 'hammer_price', 'estimate_low', 'estimate_high']]
+df_condensed = training_dataframes[['artist_name', 'artist_death_year', 'auction_house', 'auction_department', 'auction_location', 
+'auction_date', 'auction_currency', 'exchange_rate_to_usd', 'work_medium', 'work_execution_year', 'work_width', 'work_height', 
+'work_measurement_unit', 'hammer_price', 'estimate_low', 'estimate_high']].sample(frac=1).reset_index(drop=True)
 
 
 #filter out rows with missing data
@@ -141,28 +141,29 @@ for index, row in training_dataframes_filtered.iterrows():
 df_label_low = training_dataframes_filtered[['estimate_low']]
 df_label_high = training_dataframes_filtered[['estimate_high']]
 df_label = training_dataframes_filtered[['hammer_price']]
-df_training = training_dataframes_filtered.drop(['hammer_price', 'artist_name','auction_department', 
-	'exchange_rate_to_usd', 'auction_date', 'auction_house', 'auction_location', 'auction_currency', 'work_measurement_unit', 'work_medium'], axis = 1)
-
+df_training_no_estimate = training_dataframes_filtered.drop(['hammer_price', 'artist_name','auction_department', 'exchange_rate_to_usd', 'auction_date', 
+	'auction_house', 'auction_location', 'auction_currency', 'work_measurement_unit', 'work_medium', 'estimate_low', 'estimate_high'], axis = 1)
+df_training_no_high_estimate = pd.concat([df_training_no_estimate, df_label_low], axis=1)
+df_training = pd.concat([df_training_no_high_estimate, df_label_high], axis=1)
 
 # convert panda dataframe to numpy array
-
-training_size = int(math.floor(len(df_training)*.8))
+# split into test and training data sets
+training_size = int(math.floor(len(df_training)*.9))
 all_data = df_training.values
 all_label = df_label.values
+training_data_no_high_estimate = df_training_no_high_estimate.values[:training_size]
+training_data_no_estimate = df_training_no_estimate.values[:training_size]
+training_label_low = df_label_low.values[:training_size]
+training_label_high = df_label_high.values[:training_size]
 training_data = all_data[:training_size]
 training_label = all_label[:training_size]
-test_data = all_data[training_size:].drop(['estimate_low', 'estimate_high'])
+test_data = df_training.drop(['estimate_low', 'estimate_high'], axis = 1).values[training_size:]
 test_label = all_label[training_size:]
 
-training_label_low = df_label_low.values
-training_label_high = df_label_high.values
-#print(training_data)
-
 #batch size
-batch_size = 100
+batch_size = training_size
 time_step = 1
-epochs = 100
+epochs = 2000
 
 #reshape traning data into 3D for RNN
 #adding time step to training data and label
@@ -170,14 +171,12 @@ epochs = 100
 #training_label_low = training_label_low.reshape(batch_size, time_step)
 
 
-
-
 #create training model, using Relu activation for hidden layer and linear for output layer, to get estimate_low
 model_low = tf.keras.Sequential([
         #tf.keras.layers.SimpleRNN(units=1000, input_shape=(training_data_low.shape[1], training_data_low.shape[2]), activation = "relu", return_sequences = True),
         #tf.keras.layers.SimpleRNN(units=500, activation = "relu"),
-        tf.keras.layers.Dense(512, activation = 'relu'),
-        tf.keras.layers.Dense(256, activation = 'relu'),
+        tf.keras.layers.Dense(1512, activation = 'relu'),
+        tf.keras.layers.Dense(1256, activation = 'relu'),
         tf.keras.layers.Dense(1)
 ])
 
@@ -189,23 +188,15 @@ model_low.compile(loss= 'mape',
                 metrics=[ 'mape', 'mae'])
 
 #train the data, split bdetween 90/10 between training and validation data
-model_low.fit(training_data, training_label_low, epochs=epochs, batch_size=batch_size, validation_split = 0.1)
-
-#get predictions based on trained model
-predicted_results_low = model_low.predict(training_data)
-#predicted_results_low = np.concatenate(predicted_results_low, axis = 0)
-#print(predicted_results_low)
-
-#append predicted estimates_low prices to the training data
-training_data_with_estimates_low = np.append(training_data, predicted_results_low, axis=1)
+model_low.fit(training_data_no_estimate, training_label_low, epochs=epochs, batch_size=batch_size, validation_split = 0.05)
 
 
 #train model to get estimate_high
 model_high = tf.keras.Sequential([
         #tf.keras.layers.SimpleRNN(units=1000, input_shape=(training_data_low.shape[1], training_data_low.shape[2]), activation = "relu", return_sequences = True),
         #tf.keras.layers.SimpleRNN(units=500, activation = "relu"),
-        tf.keras.layers.Dense(512, activation = 'relu'),
-        tf.keras.layers.Dense(256, activation = 'relu'),
+        tf.keras.layers.Dense(1512, activation = 'relu'),
+        tf.keras.layers.Dense(1256, activation = 'relu'),
         tf.keras.layers.Dense(1)
 ])
 
@@ -215,23 +206,16 @@ model_high.compile(loss= 'mape',
                 metrics=[ 'mape', 'mae'])
 
 #train the data, split bdetween 90/10 between training and validation data
-model_high.fit(training_data_with_estimates_low, training_label_high, epochs=epochs, batch_size=batch_size, validation_split = 0.1)
+model_high.fit(training_data_no_high_estimate, training_label_high, epochs=epochs, batch_size=batch_size, validation_split = 0.05)
 
-#get predictions based on trained model
-predicted_results_high = model_high.predict(training_data_with_estimates_low)
-#predicted_results_high = np.concatenate(predicted_results_high, axis = 0)
-#print(predicted_results_high)
-
-#append predicted estimates_high prices to the training data
-data_with_trained_estimates = np.append(training_data_with_estimates_low, predicted_results_high, axis=1)
 
 
 #train model using with estimates
 model = tf.keras.Sequential([
         #tf.keras.layers.SimpleRNN(units=1000, input_shape=(training_data_low.shape[1], training_data_low.shape[2]), activation = "relu", return_sequences = True),
         #tf.keras.layers.SimpleRNN(units=500, activation = "relu"),
-        tf.keras.layers.Dense(512, activation = 'relu'),
-        tf.keras.layers.Dense(256, activation = 'relu'),
+        tf.keras.layers.Dense(1512, activation = 'relu'),
+        tf.keras.layers.Dense(1256, activation = 'relu'),
         #tf.keras.layers.Dense(512, activation = 'relu'),
         tf.keras.layers.Dense(1)
 ])
@@ -242,17 +226,28 @@ model.compile(loss= 'MAPE',
                 metrics=[ 'mape', 'mae'])
 
 #train the data, split bdetween 90/10 between training and validation data
-model.fit(training_data_with_estimates, training_label, epochs=epochs, batch_size=batch_size, validation_split = 0.1)
+model.fit(training_data, training_label, epochs=epochs, batch_size=batch_size, validation_split = 0.05)
 
 
 
-#get predictions based on trained model
-predicted_results = model.predict(training_data_with_estimates)
+#For test data without estimate features, we will use the estimate low model to predict the low estimate first, then use the out to 
+#prediect the high estimate.  And finally, use the predicted estimated value to predict our final hammer price prediction model
 
-#predicted_results_high = np.concatenate(predicted_results_high, axis = 0)
-print(predicted_results)
+#get estimate low predictions based on trained model
+estimate_low_predictions = model_low.predict(test_data)
 
-#evaluation = model.evaluate(training_data, training_label, batch_size =100)
+#append low estimate prediction to test data
+test_data = np.append(test_data, estimate_low_predictions, axis=1)
+
+#get estimate high predictions based on trained model
+estimate_high_predictions = model_high.predict(test_data)
+
+#append high estimate prediction to test data
+test_data = np.append(test_data, estimate_high_predictions, axis=1)
+
+result = model.evaluate(test_data, test_label)
+
+print(result)
 
 #print(evaluation)
 #get normalized residuals of the results.

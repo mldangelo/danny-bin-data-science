@@ -147,7 +147,7 @@ df_estimate_lows = training_dataframes_filtered[['estimate_low']]
 
 # convert panda dataframe to numpy array
 #split the data into training and test, 80/20 split
-training_size = int(math.floor(len(df_training)*.8))
+training_size = int(math.floor(len(df_training)*.9))
 all_data = df_training.values
 all_label = df_label.values
 training_data = all_data[:training_size]
