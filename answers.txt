@@ -59,3 +59,16 @@ I derived a feature gap_year, defined as auction_year - artist_death_year
  2A
 We've been tasked to predict the hammer_price of auction lots without estimates (estimate_low, estimate_high). Assume that at any point in time, we have access to historical estimates of lots that have already sold but not to estimates of future lots we would like to predict. Repeat part 1. Briefly discuss your approach. Good solutions will have comparable accuracy to your work in part 1. Present your work as a runnable python (.py) file.
 
+Because we have access to the historical estimate_low and estimate_high data, I used applied the same model we used for part 1 to predict estimate low price and subsequently estimate high price.  So for the test data without estimated prices, I use the estimate low and estimiate high model to predict the estimated low and high prices, then feed the test data with the predicted estimated features into our original model.  This approach yields a comparable accuracy to the results in part 1.
+
+
+
+Please answer each in a few sentences.
+
+Which features are most important for your model? Are there any features that surprised you? Given more data, describe other features you feel would be useful in improving the accuracy of your model.
+
+Now, assume we care much more about not over-predicting hammer_price than we do about under-predicting the hammer_price. Describe how you would go about changing your solution in terms of the model, objective function, etc.
+
+Given more time but no new features, how much do you think you could improve the accuracy of your models by? Why? Now assume that we structure all of the information in the observable universe. What types of new features do you expect to have the greatest impact in performance?
+
+Was this fun? Which sections / questions were the most difficult and which were the easiest? 
