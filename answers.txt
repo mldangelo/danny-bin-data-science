@@ -67,8 +67,22 @@ Please answer each in a few sentences.
 
 Which features are most important for your model? Are there any features that surprised you? Given more data, describe other features you feel would be useful in improving the accuracy of your model.
 
+Estimate Low and Estimate High were definitely by far the most important features for the model.  It cut the error rate by 50% when including these 2 feastures.  To my surpise, the dimention of the art work did not have as big of an impact on on the prediction model as I would have expected.  Given more data, especailly with art work from other artists, I do believe the nationalities and artist death year would be a more signifant feature in predicting the hammer price.
+
+
+
+
 Now, assume we care much more about not over-predicting hammer_price than we do about under-predicting the hammer_price. Describe how you would go about changing your solution in terms of the model, objective function, etc.
+If this is the case, I would design an asymetric loss function that penalize over prediction much more than under prediction.  One such loss function comes to mind is a quantile regression loss function.
+
+
+
 
 Given more time but no new features, how much do you think you could improve the accuracy of your models by? Why? Now assume that we structure all of the information in the observable universe. What types of new features do you expect to have the greatest impact in performance?
 
+Given more time but no new features, I suspect a categorical feature derived from a nlp clustering model of the description can potentially improve the accuracy of the model.
+
+
+
 Was this fun? Which sections / questions were the most difficult and which were the easiest? 
+Very much so!  I had a great deal of fun trying out various combination of models and features sets to improve the model.
